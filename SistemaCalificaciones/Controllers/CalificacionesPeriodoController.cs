@@ -18,28 +18,6 @@ public class CalificacionesPeriodoController : ControllerBase
         _context = context;
     }
 
-    [HttpGet("estudiante/{idEstudiante}")]
-    public async Task<IActionResult> GetPorEstudiante(int idEstudiante)
-    {
-        var calificaciones = await _context.CalificacionesPeriodo
-            .Include(c => c.AsignacionDocente)
-                .ThenInclude(a => a.Materia)
-            .Include(c => c.PeriodoPublicacion)
-            .Where(c => c.IdEstudiante == idEstudiante && c.Publicada)
-            .OrderBy(c => c.PeriodoPublicacion.FechaInicio)
-            .Select(c => new
-            {
-                c.IdCalificacionPeriodo,
-                Materia = c.AsignacionDocente.Materia.Nombre,
-                Periodo = c.PeriodoPublicacion.Nombre,
-                c.NotaFinal,
-                c.FechaPublicacion
-            })
-            .ToListAsync();
-
-        return Ok(calificaciones);
-    }
-
     [HttpPost("calcular")]
     public async Task<IActionResult> Calcular(int idAsignacionDocente, int idPeriodoPublicacion)
     {
@@ -142,5 +120,31 @@ public class CalificacionesPeriodoController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Ok("Calificaciones publicadas correctamente.");
+    }
+
+    [HttpGet("estudiante/{idEstudiante}")]
+    [Authorize(Roles = "Administrador,Maestro,Estudiante,Padre")]
+    public async Task<IActionResult> GetPorEstudiante(int idEstudiante)
+    {
+        var calificaciones = await _context.CalificacionesPeriodo
+            .Include(c => c.AsignacionDocente)
+                .ThenInclude(a => a.Materia)
+            .Include(c => c.PeriodoPublicacion)
+            .Where(c => c.IdEstudiante == idEstudiante && c.Publicada)
+            .OrderBy(c => c.AsignacionDocente.Materia.Nombre)
+            .ThenBy(c => c.PeriodoPublicacion.FechaInicio)
+            .Select(c => new
+            {
+                c.IdCalificacionPeriodo,
+                c.IdAsignacionDocente,
+                c.IdPeriodoPublicacion,
+                Materia = c.AsignacionDocente.Materia.Nombre,
+                Periodo = c.PeriodoPublicacion.Nombre,
+                c.NotaFinal,
+                c.FechaPublicacion
+            })
+            .ToListAsync();
+
+        return Ok(calificaciones);
     }
 }

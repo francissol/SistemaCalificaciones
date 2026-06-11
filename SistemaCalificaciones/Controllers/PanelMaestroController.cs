@@ -92,6 +92,45 @@ public class PanelMaestroController : ControllerBase
         return Ok(estudiantes);
     }
 
+
+    [HttpGet("asignacion/{idAsignacionDocente}/detalle")]
+    public async Task<IActionResult> DetalleAsignacion(int idAsignacionDocente)
+    {
+        var idUsuario = GetIdUsuario();
+
+        var maestro = await _context.Maestros
+            .FirstOrDefaultAsync(m => m.IdUsuario == idUsuario);
+
+        if (maestro == null)
+            return NotFound("Maestro no encontrado.");
+
+        var asignacion = await _context.AsignacionesDocentes
+            .Include(a => a.Curso)
+                .ThenInclude(c => c.Grado)
+                    .ThenInclude(g => g.Nivel)
+            .Include(a => a.Materia)
+            .Include(a => a.AnioEscolar)
+            .FirstOrDefaultAsync(a =>
+                a.IdAsignacionDocente == idAsignacionDocente &&
+                a.IdMaestro == maestro.IdMaestro);
+
+        if (asignacion == null)
+            return Unauthorized("No tienes acceso a esta asignación.");
+
+        return Ok(new
+        {
+            asignacion.IdAsignacionDocente,
+            Curso = asignacion.Curso.Nombre,
+            Grado = asignacion.Curso.Grado.Nombre,
+            Nivel = asignacion.Curso.Grado.Nivel.Nombre,
+            UsaCompetencias = asignacion.Curso.Grado.Nivel.UsaCompetencias,
+            IdGrado = asignacion.Curso.IdGrado,
+            IdMateria = asignacion.IdMateria,
+            Materia = asignacion.Materia.Nombre,
+            AnioEscolar = asignacion.AnioEscolar.Nombre
+        });
+    }
+
     [HttpGet("asignacion/{idAsignacionDocente}/periodo/{idPeriodoPublicacion}/resumen-notas")]
     public async Task<IActionResult> ResumenNotas(int idAsignacionDocente, int idPeriodoPublicacion)
     {

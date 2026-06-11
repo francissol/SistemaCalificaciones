@@ -31,6 +31,15 @@ public class AppDbContext : DbContext
     public DbSet<CalificacionPeriodo> CalificacionesPeriodo => Set<CalificacionPeriodo>();
     public DbSet<Observacion> Observaciones => Set<Observacion>();
 
+    public DbSet<Competencia> Competencias { get; set; }
+
+    public DbSet<CompetenciaGradoMateria> CompetenciasGradoMateria { get; set; }
+
+    public DbSet<ActividadCompetencia> ActividadesCompetencias { get; set; }
+
+    public DbSet<NotaCompetencia> NotasCompetencias { get; set; }
+    public DbSet<CalificacionCompetenciaPeriodo> CalificacionesCompetenciasPeriodo => Set<CalificacionCompetenciaPeriodo>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -60,6 +69,14 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<NotaActividad>().HasKey(x => x.IdNotaActividad);
         modelBuilder.Entity<CalificacionPeriodo>().HasKey(x => x.IdCalificacionPeriodo);
         modelBuilder.Entity<Observacion>().HasKey(x => x.IdObservacion);
+
+
+
+        modelBuilder.Entity<Competencia>().HasKey(x => x.IdCompetencia);
+        modelBuilder.Entity<CompetenciaGradoMateria>().HasKey(x => x.IdCompetenciaGradoMateria);
+        modelBuilder.Entity<ActividadCompetencia>().HasKey(x => x.IdActividadCompetencia);
+        modelBuilder.Entity<NotaCompetencia>().HasKey(x => x.IdNotaCompetencia);
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>().HasKey(x => x.IdCalificacionCompetenciaPeriodo);
 
         // =========================
         // DATOS INICIALES
@@ -280,6 +297,84 @@ public class AppDbContext : DbContext
             .HasIndex(c => new { c.IdEstudiante, c.IdAsignacionDocente, c.IdPeriodoPublicacion })
             .IsUnique();
 
+
+
+
+        // =========================
+        // RELACIONES COMPETENCIAS
+        // =========================
+
+        modelBuilder.Entity<CompetenciaGradoMateria>()
+            .HasOne(x => x.Grado)
+            .WithMany()
+            .HasForeignKey(x => x.IdGrado)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CompetenciaGradoMateria>()
+            .HasOne(x => x.Materia)
+            .WithMany()
+            .HasForeignKey(x => x.IdMateria)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CompetenciaGradoMateria>()
+            .HasOne(x => x.Competencia)
+            .WithMany()
+            .HasForeignKey(x => x.IdCompetencia)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ActividadCompetencia>()
+            .HasOne(x => x.AsignacionDocente)
+            .WithMany()
+            .HasForeignKey(x => x.IdAsignacionDocente)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ActividadCompetencia>()
+            .HasOne(x => x.PeriodoPublicacion)
+            .WithMany()
+            .HasForeignKey(x => x.IdPeriodoPublicacion)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ActividadCompetencia>()
+            .HasOne(x => x.Competencia)
+            .WithMany()
+            .HasForeignKey(x => x.IdCompetencia)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<NotaCompetencia>()
+            .HasOne(x => x.ActividadCompetencia)
+            .WithMany()
+            .HasForeignKey(x => x.IdActividadCompetencia)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<NotaCompetencia>()
+            .HasOne(x => x.Estudiante)
+            .WithMany()
+            .HasForeignKey(x => x.IdEstudiante)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>()
+            .HasOne(x => x.Estudiante)
+            .WithMany()
+            .HasForeignKey(x => x.IdEstudiante)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>()
+            .HasOne(x => x.AsignacionDocente)
+            .WithMany()
+            .HasForeignKey(x => x.IdAsignacionDocente)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>()
+            .HasOne(x => x.PeriodoPublicacion)
+            .WithMany()
+            .HasForeignKey(x => x.IdPeriodoPublicacion)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>()
+            .HasOne(x => x.Competencia)
+            .WithMany()
+            .HasForeignKey(x => x.IdCompetencia)
+            .OnDelete(DeleteBehavior.Restrict);
         // =========================
         // DECIMALES
         // =========================
@@ -294,6 +389,15 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<CalificacionPeriodo>()
             .Property(c => c.NotaFinal)
+            .HasColumnType("decimal(5,2)");
+
+
+        modelBuilder.Entity<NotaCompetencia>()
+    .Property(n => n.Nota)
+    .HasColumnType("decimal(5,2)");
+
+        modelBuilder.Entity<CalificacionCompetenciaPeriodo>()
+            .Property(c => c.Promedio)
             .HasColumnType("decimal(5,2)");
     }
 }
