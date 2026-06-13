@@ -74,6 +74,7 @@ public class ImportacionExcelController : ControllerBase
                 string? direccion = row.Cell(8).GetString().Trim();
 
                 string cursoNombre = row.Cell(9).GetString().Trim();
+                string nivelNombre = row.Cell(10).GetString().Trim();
 
                 string nombrePadre = row.Cell(10).GetString().Trim();
                 string apellidoPadre = row.Cell(11).GetString().Trim();
@@ -90,17 +91,30 @@ public class ImportacionExcelController : ControllerBase
                 if (string.IsNullOrWhiteSpace(cursoNombre))
                     throw new Exception("El curso está vacío.");
 
+
+                if (string.IsNullOrWhiteSpace(nivelNombre))
+                    throw new Exception("El nivel está vacío.");
+
                 var existeEstudiante = await _context.Estudiantes
                     .AnyAsync(e => e.Matricula == matricula);
 
                 if (existeEstudiante)
                     throw new Exception($"Ya existe un estudiante con matrícula {matricula}.");
 
+                var cursoNombreNormalizado = cursoNombre.Replace(" ", "").ToLower();
+                var nivelNombreNormalizado = nivelNombre.Trim().ToLower();
+
                 var curso = await _context.Cursos
-                    .FirstOrDefaultAsync(c => c.Nombre == cursoNombre && c.Activo);
+                    .Include(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
+                    .FirstOrDefaultAsync(c =>
+                        c.Nombre.Replace(" ", "").ToLower() == cursoNombreNormalizado &&
+                        c.Grado.Nivel.Nombre.ToLower() == nivelNombreNormalizado &&
+                        c.Activo
+                    );
 
                 if (curso == null)
-                    throw new Exception($"No existe el curso {cursoNombre}.");
+                    throw new Exception($"No existe el curso {cursoNombre} en el nivel {nivelNombre}.");
 
                 var usuarioEstudianteNombre = await _usuarioGenerator.GenerarNombreUsuarioAsync(nombres, apellidos);
                 var passwordTemporal = _usuarioGenerator.GenerarPasswordTemporal();
