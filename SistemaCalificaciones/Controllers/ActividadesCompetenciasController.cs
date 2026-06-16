@@ -122,4 +122,72 @@ public class ActividadesCompetenciasController : ControllerBase
             actividad.Activa
         });
     }
+
+
+
+    [HttpGet("ra/asignacion/{idAsignacionDocente}")]
+    public async Task<IActionResult> ActividadesRA(int idAsignacionDocente)
+    {
+        var actividades = await _context.ActividadesCompetencias
+            .Include(a => a.ResultadoAprendizaje)
+            .Where(a =>
+                a.IdAsignacionDocente == idAsignacionDocente &&
+                a.IdResultadoAprendizaje != null &&
+                a.Activa)
+            .Select(a => new
+            {
+                a.IdActividadCompetencia,
+                a.IdResultadoAprendizaje,
+                RA = a.ResultadoAprendizaje!.Codigo,
+                a.Nombre
+            })
+            .ToListAsync();
+
+        return Ok(actividades);
+    }
+
+    [HttpPost("ra")]
+    public async Task<IActionResult> CrearActividadRA(CrearActividadRADto dto)
+    {
+        var ra = await _context.ResultadosAprendizaje
+            .FirstOrDefaultAsync(r =>
+                r.IdResultadoAprendizaje == dto.IdResultadoAprendizaje &&
+                r.IdAsignacionDocente == dto.IdAsignacionDocente &&
+                r.Activo);
+
+        if (ra == null)
+            return BadRequest("RA no encontrado para esta asignación.");
+
+        var actividad = new ActividadCompetencia
+        {
+            IdAsignacionDocente = dto.IdAsignacionDocente,
+            IdPeriodoPublicacion = null,
+            IdCompetencia = null,
+            IdResultadoAprendizaje = dto.IdResultadoAprendizaje,
+            Nombre = dto.Nombre,
+            Activa = true
+        };
+
+        _context.ActividadesCompetencias.Add(actividad);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            actividad.IdActividadCompetencia,
+            actividad.IdResultadoAprendizaje,
+            actividad.Nombre
+        });
+    }
+
+
+
+
+
+
+}
+public class CrearActividadRADto
+{
+    public int IdAsignacionDocente { get; set; }
+    public int IdResultadoAprendizaje { get; set; }
+    public string Nombre { get; set; } = "";
 }

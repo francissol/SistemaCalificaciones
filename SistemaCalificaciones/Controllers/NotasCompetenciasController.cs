@@ -53,8 +53,14 @@ public class NotasCompetenciasController : ControllerBase
         if (actividad == null || !actividad.Activa)
             return BadRequest("La actividad no existe o está inactiva.");
 
-        if (DateTime.Now.Date > actividad.PeriodoPublicacion.FechaCierre.Date)
+        // Solo validar fecha de cierre si es actividad por competencias.
+        // Las actividades RA son anuales y no tienen período.
+        if (actividad.IdPeriodoPublicacion.HasValue &&
+            actividad.PeriodoPublicacion != null &&
+            DateTime.Now.Date > actividad.PeriodoPublicacion.FechaCierre.Date)
+        {
             return BadRequest("El período ya cerró. No puedes registrar notas.");
+        }
 
         var estudianteExiste = await _context.Estudiantes
             .AnyAsync(e => e.IdEstudiante == dto.IdEstudiante && e.Activo);
@@ -83,7 +89,9 @@ public class NotasCompetenciasController : ControllerBase
 
         return Ok(new
         {
-            mensaje = "Nota por competencia registrada correctamente.",
+            mensaje = actividad.IdResultadoAprendizaje.HasValue
+                ? "Nota por RA registrada correctamente."
+                : "Nota por competencia registrada correctamente.",
             nota.IdNotaCompetencia,
             nota.IdEstudiante,
             nota.Nota
@@ -104,8 +112,12 @@ public class NotasCompetenciasController : ControllerBase
         if (nota == null)
             return NotFound("Nota no encontrada.");
 
-        if (DateTime.Now.Date > nota.ActividadCompetencia.PeriodoPublicacion.FechaCierre.Date)
+        if (nota.ActividadCompetencia.IdPeriodoPublicacion.HasValue &&
+     nota.ActividadCompetencia.PeriodoPublicacion != null &&
+     DateTime.Now.Date > nota.ActividadCompetencia.PeriodoPublicacion.FechaCierre.Date)
+        {
             return BadRequest("El período ya cerró. No puedes modificar esta nota.");
+        }
 
         nota.Nota = dto.Nota;
 

@@ -53,6 +53,7 @@ public class MateriasController : ControllerBase
         {
             Nombre = dto.Nombre,
             Abreviatura = dto.Abreviatura,
+            EsTecnica = dto.EsTecnica,
             Activa = true
         };
 

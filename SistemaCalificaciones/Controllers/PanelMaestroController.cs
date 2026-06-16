@@ -126,6 +126,7 @@ public class PanelMaestroController : ControllerBase
             UsaCompetencias = asignacion.Curso.Grado.Nivel.UsaCompetencias,
             IdGrado = asignacion.Curso.IdGrado,
             IdMateria = asignacion.IdMateria,
+            EsTecnica = asignacion.Materia.EsTecnica,
             Materia = asignacion.Materia.Nombre,
             AnioEscolar = asignacion.AnioEscolar.Nombre
         });

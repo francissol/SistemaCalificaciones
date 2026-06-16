@@ -7,6 +7,8 @@
 
         public string Nombre { get; set; } = string.Empty;
         public string? Abreviatura { get; set; }
+        public bool EsTecnica { get; set; } = false;
+
 
         public bool Activa { get; set; } = true;
 

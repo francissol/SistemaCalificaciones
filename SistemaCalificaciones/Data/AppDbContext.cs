@@ -16,6 +16,11 @@ public class AppDbContext : DbContext
     public DbSet<Padre> Padres => Set<Padre>();
     public DbSet<PadreEstudiante> PadreEstudiantes => Set<PadreEstudiante>();
 
+    public DbSet<ResultadoAprendizaje> ResultadosAprendizaje { get; set; }
+
+
+    public DbSet<CalificacionRA> CalificacionesRA { get; set; }
+
     public DbSet<AnioEscolar> AniosEscolares => Set<AnioEscolar>();
     public DbSet<Nivel> Niveles => Set<Nivel>();
     public DbSet<Grado> Grados => Set<Grado>();
@@ -92,6 +97,13 @@ public class AppDbContext : DbContext
         // =========================
         // RELACIONES
         // =========================
+
+
+        modelBuilder.Entity<ActividadCompetencia>()
+    .HasOne(a => a.ResultadoAprendizaje)
+    .WithMany()
+    .HasForeignKey(a => a.IdResultadoAprendizaje)
+    .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Usuario>()
             .HasOne(u => u.Rol)

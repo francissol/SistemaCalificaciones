@@ -10,7 +10,6 @@ public class ActividadEvaluativa
 
     public int IdPeriodoPublicacion { get; set; }
     public PeriodoPublicacion PeriodoPublicacion { get; set; } = null!;
-
     public string Nombre { get; set; } = string.Empty;
 
     public decimal Porcentaje { get; set; }
