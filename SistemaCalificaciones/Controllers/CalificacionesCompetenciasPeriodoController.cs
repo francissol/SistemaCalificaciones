@@ -25,13 +25,14 @@ public class CalificacionesCompetenciasPeriodoController : ControllerBase
             .Include(a => a.Curso)
                 .ThenInclude(c => c.Grado)
                     .ThenInclude(g => g.Nivel)
+            .Include(a => a.Materia)
             .FirstOrDefaultAsync(a => a.IdAsignacionDocente == idAsignacionDocente);
 
         if (asignacion == null)
             return BadRequest("Asignación docente no encontrada.");
 
-        if (!asignacion.Curso.Grado.Nivel.UsaCompetencias)
-            return BadRequest("Esta asignación no pertenece a primaria o nivel por competencias.");
+        if (asignacion.Materia.EsTecnica)
+            return BadRequest("Las materias técnicas usan Resultados de Aprendizaje.");
 
         var estudiantes = await _context.Inscripciones
             .Where(i =>
@@ -60,21 +61,22 @@ public class CalificacionesCompetenciasPeriodoController : ControllerBase
                         a.IdAsignacionDocente == idAsignacionDocente &&
                         a.IdPeriodoPublicacion == idPeriodoPublicacion &&
                         a.IdCompetencia == competencia.IdCompetencia &&
+                        a.IdResultadoAprendizaje == null &&
                         a.Activa)
                     .ToListAsync();
 
-                
+                var idsActividades = actividades
+                    .Select(a => a.IdActividadCompetencia)
+                    .ToList();
+
                 var notas = await _context.NotasCompetencias
                     .Where(n =>
-                        actividades.Select(a => a.IdActividadCompetencia)
-                            .Contains(n.IdActividadCompetencia) &&
+                        idsActividades.Contains(n.IdActividadCompetencia) &&
                         n.IdEstudiante == estudiante.IdEstudiante)
                     .ToListAsync();
 
                 if (!notas.Any())
-                {
                     continue;
-                }
 
                 var promedio = Math.Round(notas.Average(n => n.Nota), 2);
 
@@ -103,6 +105,7 @@ public class CalificacionesCompetenciasPeriodoController : ControllerBase
                 else
                 {
                     calificacion.Promedio = promedio;
+                    calificacion.FechaRegistro = DateTime.Now;
                 }
             }
         }

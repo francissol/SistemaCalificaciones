@@ -1,12 +1,13 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using iText.IO.Font.Constants;
+using iText.Kernel.Font;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SistemaCalificaciones.Data;
+using SistemaCalificaciones.Helpers;
 using SistemaCalificaciones.Models;
-using iText.Kernel.Pdf;
-using iText.Kernel.Font;
-using iText.IO.Font.Constants;
-using iText.Kernel.Pdf.Canvas;
 using SistemaCalificaciones.Models;
 
 namespace SistemaCalificaciones.Controllers;
@@ -15,7 +16,7 @@ namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador, Maestro")]
+[Authorize(Roles = "Administrador, Maestro,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class ReportesController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -430,12 +431,23 @@ public class ReportesController : ControllerBase
         if (periodo == null)
             return NotFound("Período no encontrado.");
 
-        var asignaciones = await _context.AsignacionesDocentes
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
+        var query = _context.AsignacionesDocentes
             .Include(a => a.Maestro)
             .Include(a => a.Curso)
+                .ThenInclude(c => c.Grado)
+                    .ThenInclude(g => g.Nivel)
             .Include(a => a.Materia)
             .Where(a => a.IdAnioEscolar == periodo.IdAnioEscolar && a.Activo)
-            .ToListAsync();
+            .AsQueryable();
+
+        if (nivelCoordinador != null)
+        {
+            query = query.Where(a => a.Curso.Grado.Nivel.Nombre == nivelCoordinador);
+        }
+
+        var asignaciones = await query.ToListAsync();
 
         var resultado = new List<object>();
 
@@ -447,18 +459,20 @@ public class ReportesController : ControllerBase
                     i.IdAnioEscolar == asignacion.IdAnioEscolar &&
                     i.Estado == "Activo");
 
-            var totalPublicadas = await _context.CalificacionesPeriodo
+            var totalPublicadas = await _context.CalificacionesCompetenciasPeriodo
                 .CountAsync(c =>
                     c.IdAsignacionDocente == asignacion.IdAsignacionDocente &&
                     c.IdPeriodoPublicacion == idPeriodoPublicacion &&
                     c.Publicada);
 
-            bool completo = totalEstudiantes > 0 && totalPublicadas >= totalEstudiantes;
+            var completo = totalEstudiantes > 0 && totalPublicadas >= totalEstudiantes;
 
             resultado.Add(new
             {
                 Maestro = asignacion.Maestro.Nombres + " " + asignacion.Maestro.Apellidos,
                 Curso = asignacion.Curso.Nombre,
+                Grado = asignacion.Curso.Grado.Nombre,
+                Nivel = asignacion.Curso.Grado.Nivel.Nombre,
                 Materia = asignacion.Materia.Nombre,
                 TotalEstudiantes = totalEstudiantes,
                 TotalPublicadas = totalPublicadas,
@@ -466,16 +480,22 @@ public class ReportesController : ControllerBase
             });
         }
 
+        var completadas = resultado.Count(r =>
+            r.GetType().GetProperty("Estado")?.GetValue(r)?.ToString() == "Completado");
+
+        var pendientes = resultado.Count(r =>
+            r.GetType().GetProperty("Estado")?.GetValue(r)?.ToString() == "Pendiente");
+
         return Ok(new
         {
             Periodo = periodo.Nombre,
+            Nivel = nivelCoordinador ?? "Todos",
             TotalAsignaciones = resultado.Count,
-            Completadas = resultado.Count(r => r.ToString()!.Contains("Completado")),
-            Pendientes = resultado.Count(r => r.ToString()!.Contains("Pendiente")),
+            Completadas = completadas,
+            Pendientes = pendientes,
             Detalle = resultado
         });
     }
-
 
 
     [HttpGet("primaria/anual/curso/{idCurso}")]
@@ -705,16 +725,19 @@ public class ReportesController : ControllerBase
 
                     if (notas.Any())
                     {
-                        var promedioRA = notas.Average();
-                        valoresRA[i] = Math.Round(promedioRA * ra.ValorMaximo / 100, 2);
+                        var notaRA = notas.Sum();
+
+                        if (notaRA > ra.ValorMaximo)
+                            notaRA = ra.ValorMaximo;
+
+                        valoresRA[i] = Math.Round(notaRA, 2);
                     }
                 }
 
                 decimal? totalTecnico = valoresRA
-                    .Where(x => x.HasValue)
-                    .Select(x => x!.Value)
-                    .DefaultIfEmpty()
-                    .Sum();
+     .Where(x => x.HasValue)
+     .Select(x => x!.Value)
+     .Sum();
 
                 materiasTecnicas.Add(new
                 {
@@ -818,6 +841,162 @@ public class ReportesController : ControllerBase
             "application/pdf",
             $"Reporte_Anual_Secundaria_3ro_Curso_{idCurso}.pdf"
         );
+    }
+
+    [HttpGet("politecnico/anual/curso/{idCurso}")]
+    public async Task<IActionResult> ReporteAnualPolitecnicoPorCurso(int idCurso)
+    {
+        var curso = await _context.Cursos
+            .Include(c => c.Grado)
+                .ThenInclude(g => g.Nivel)
+            .FirstOrDefaultAsync(c => c.IdCurso == idCurso);
+
+        if (curso == null)
+            return NotFound("Curso no encontrado.");
+
+        var estudiantes = await _context.Inscripciones
+            .Include(i => i.Estudiante)
+            .Where(i => i.IdCurso == idCurso && i.Estado == "Activo")
+            .Select(i => i.Estudiante)
+            .OrderBy(e => e.Apellidos)
+            .ThenBy(e => e.Nombres)
+            .ToListAsync();
+
+        var asignaciones = await _context.AsignacionesDocentes
+            .Include(a => a.Materia)
+            .Where(a => a.IdCurso == idCurso && a.Activo)
+            .ToListAsync();
+
+        var asignacionesNormales = asignaciones
+            .Where(a => !a.Materia.EsTecnica)
+            .ToList();
+
+        var asignacionesTecnicas = asignaciones
+            .Where(a => a.Materia.EsTecnica)
+            .ToList();
+
+        var reportes = new List<object>();
+
+        foreach (var estudiante in estudiantes)
+        {
+            var materiasNormales = new List<object>();
+
+            foreach (var asignacion in asignacionesNormales)
+            {
+                var calificaciones = await _context.CalificacionesCompetenciasPeriodo
+                    .Include(c => c.Competencia)
+                    .Where(c =>
+                        c.IdEstudiante == estudiante.IdEstudiante &&
+                        c.IdAsignacionDocente == asignacion.IdAsignacionDocente &&
+                        c.Publicada)
+                    .ToListAsync();
+
+                decimal? pc1 = PromedioCompetencia(calificaciones, "C1");
+                decimal? pc2 = PromedioCompetencia(calificaciones, "C2");
+                decimal? pc3 = PromedioCompetencia(calificaciones, "C3");
+                decimal? pc4 = PromedioCompetencia(calificaciones, "C4");
+
+                var valores = new List<decimal?> { pc1, pc2, pc3, pc4 }
+                    .Where(x => x.HasValue)
+                    .Select(x => x!.Value)
+                    .ToList();
+
+                var finalArea = valores.Any()
+                    ? Math.Round(valores.Average(), 2)
+                    : 0;
+
+                materiasNormales.Add(new
+                {
+                    Materia = asignacion.Materia.Nombre,
+                    PC1 = pc1,
+                    PC2 = pc2,
+                    PC3 = pc3,
+                    PC4 = pc4,
+                    FinalArea = finalArea
+                });
+            }
+
+            var materiasTecnicas = new List<object>();
+
+            foreach (var asignacion in asignacionesTecnicas)
+            {
+                var ras = await _context.ResultadosAprendizaje
+                    .Where(r =>
+                        r.IdAsignacionDocente == asignacion.IdAsignacionDocente &&
+                        r.Activo)
+                    .OrderBy(r => r.Codigo)
+                    .Take(12)
+                    .ToListAsync();
+
+                var valoresRA = new decimal?[12];
+
+                for (int i = 0; i < ras.Count && i < 12; i++)
+                {
+                    var ra = ras[i];
+
+                    var actividadesIds = await _context.ActividadesCompetencias
+                        .Where(a =>
+                            a.IdResultadoAprendizaje == ra.IdResultadoAprendizaje &&
+                            a.Activa)
+                        .Select(a => a.IdActividadCompetencia)
+                        .ToListAsync();
+
+                    var notaRA = await _context.NotasCompetencias
+                        .Where(n =>
+                            actividadesIds.Contains(n.IdActividadCompetencia) &&
+                            n.IdEstudiante == estudiante.IdEstudiante)
+                        .SumAsync(n => (decimal?)n.Nota) ?? 0;
+
+                    if (notaRA > ra.ValorMaximo)
+                        notaRA = ra.ValorMaximo;
+
+                    if (notaRA > 0)
+                        valoresRA[i] = Math.Round(notaRA, 2);
+                }
+
+                var totalTecnico = valoresRA
+                    .Where(x => x.HasValue)
+                    .Select(x => x!.Value)
+                    .Sum();
+
+                materiasTecnicas.Add(new
+                {
+                    Materia = asignacion.Materia.Nombre,
+                    RA1 = valoresRA[0],
+                    RA2 = valoresRA[1],
+                    RA3 = valoresRA[2],
+                    RA4 = valoresRA[3],
+                    RA5 = valoresRA[4],
+                    RA6 = valoresRA[5],
+                    RA7 = valoresRA[6],
+                    RA8 = valoresRA[7],
+                    RA9 = valoresRA[8],
+                    RA10 = valoresRA[9],
+                    RA11 = valoresRA[10],
+                    RA12 = valoresRA[11],
+                    Total = totalTecnico
+                });
+            }
+
+            reportes.Add(new
+            {
+                estudiante.IdEstudiante,
+                Estudiante = estudiante.Nombres + " " + estudiante.Apellidos,
+                estudiante.Matricula,
+                Curso = curso.Nombre,
+                Grado = curso.Grado.Nombre,
+                MateriasNormales = materiasNormales,
+                MateriasTecnicas = materiasTecnicas
+            });
+        }
+
+        return Ok(new
+        {
+            Curso = curso.Nombre,
+            Grado = curso.Grado.Nombre,
+            Nivel = curso.Grado.Nivel.Nombre,
+            Reportes = reportes
+        });
     }
 
     [HttpGet("observaciones-estudiante/{idEstudiante}")]
@@ -945,6 +1124,8 @@ public class ReportesController : ControllerBase
         public decimal? PC4 { get; set; }
         public decimal FinalArea { get; set; }
     }
+
+
     private async Task<ReporteAnualSecundariaData?> GenerarDatosReporteAnualSecundaria(int idCurso)
     {
         var curso = await _context.Cursos

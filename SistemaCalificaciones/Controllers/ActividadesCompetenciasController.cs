@@ -61,8 +61,14 @@ public class ActividadesCompetenciasController : ControllerBase
         if (asignacion == null || !asignacion.Activo)
             return BadRequest("La asignación docente no existe o está inactiva.");
 
-        if (!asignacion.Curso.Grado.Nivel.UsaCompetencias)
-            return BadRequest("Este curso no pertenece a un nivel que use competencias.");
+        if (asignacion.Materia.EsTecnica)
+            return BadRequest("Las materias técnicas usan Resultados de Aprendizaje.");
+
+        if (dto.IdPeriodoPublicacion == null)
+            return BadRequest("Debe seleccionar un período.");
+
+        if (dto.IdCompetencia == null)
+            return BadRequest("Debe seleccionar una competencia.");
 
         var periodo = await _context.PeriodosPublicacion
             .FirstOrDefaultAsync(p => p.IdPeriodoPublicacion == dto.IdPeriodoPublicacion);
@@ -87,6 +93,7 @@ public class ActividadesCompetenciasController : ControllerBase
             IdAsignacionDocente = dto.IdAsignacionDocente,
             IdPeriodoPublicacion = dto.IdPeriodoPublicacion,
             IdCompetencia = dto.IdCompetencia,
+            IdResultadoAprendizaje = null,
             Nombre = dto.Nombre,
             FechaCreacion = DateTime.Now,
             Activa = true

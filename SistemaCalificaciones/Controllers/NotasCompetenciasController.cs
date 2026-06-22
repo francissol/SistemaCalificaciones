@@ -9,7 +9,7 @@ namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Maestro")]
+[Authorize(Roles = "Administrador,Maestro,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class NotasCompetenciasController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -98,6 +98,28 @@ public class NotasCompetenciasController : ControllerBase
         });
     }
 
+    [HttpGet("asignacion/{idAsignacionDocente}/periodo/{idPeriodoPublicacion}")]
+    public async Task<IActionResult> GetNotasPorAsignacionPeriodo(
+    int idAsignacionDocente,
+    int idPeriodoPublicacion)
+    {
+        var notas = await _context.NotasCompetencias
+            .Include(n => n.ActividadCompetencia)
+            .Where(n =>
+                n.ActividadCompetencia.IdAsignacionDocente == idAsignacionDocente &&
+                n.ActividadCompetencia.IdPeriodoPublicacion == idPeriodoPublicacion)
+            .Select(n => new
+            {
+                n.IdNotaCompetencia,
+                n.IdActividadCompetencia,
+                n.IdEstudiante,
+                n.Nota
+            })
+            .ToListAsync();
+
+        return Ok(notas);
+    }
+
     [HttpPut("{id}")]
     public async Task<IActionResult> Actualizar(int id, CrearNotaCompetenciaDto dto)
     {
@@ -129,5 +151,54 @@ public class NotasCompetenciasController : ControllerBase
             nota.IdNotaCompetencia,
             nota.Nota
         });
+    }
+
+
+    public class GuardarNotaCompetenciaDto
+    {
+        public int IdActividadCompetencia { get; set; }
+        public int IdEstudiante { get; set; }
+        public decimal? Nota { get; set; }
+    }
+
+    [HttpPost("guardar-masivo")]
+    public async Task<IActionResult> GuardarMasivo(
+        List<GuardarNotaCompetenciaDto> notasDto)
+    {
+        foreach (var item in notasDto)
+        {
+            if (item.Nota == null)
+                continue;
+
+            if (item.Nota < 0 || item.Nota > 100)
+                return BadRequest("Las notas deben estar entre 0 y 100.");
+
+            var notaExistente = await _context.NotasCompetencias
+                .FirstOrDefaultAsync(n =>
+                    n.IdActividadCompetencia == item.IdActividadCompetencia &&
+                    n.IdEstudiante == item.IdEstudiante);
+
+            if (notaExistente == null)
+            {
+                var nuevaNota = new NotaCompetencia
+                {
+                    IdActividadCompetencia = item.IdActividadCompetencia,
+                    IdEstudiante = item.IdEstudiante,
+                    Nota = item.Nota.Value,
+                    FechaRegistro = DateTime.Now
+                };
+
+                _context.NotasCompetencias.Add(nuevaNota);
+            }
+            else
+            {
+                notaExistente.Nota = item.Nota.Value;
+                notaExistente.FechaRegistro = DateTime.Now;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok("Calificaciones guardadas correctamente.");
     }
 }

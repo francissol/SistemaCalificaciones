@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SistemaCalificaciones.Data;
+using SistemaCalificaciones.Models;
 using System.Security.Claims;
 
 namespace SistemaCalificaciones.Controllers;
@@ -21,6 +22,7 @@ public class PanelMaestroController : ControllerBase
     private int GetIdUsuario()
     {
         return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        
     }
 
     [HttpGet("mis-asignaciones")]
@@ -30,6 +32,7 @@ public class PanelMaestroController : ControllerBase
 
         var maestro = await _context.Maestros
             .FirstOrDefaultAsync(m => m.IdUsuario == idUsuario);
+        
 
         if (maestro == null)
             return NotFound("Maestro no encontrado.");
@@ -37,14 +40,18 @@ public class PanelMaestroController : ControllerBase
         var asignaciones = await _context.AsignacionesDocentes
             .Include(a => a.Curso)
                 .ThenInclude(c => c.Grado)
+                .ThenInclude(g => g.Nivel )
             .Include(a => a.Materia)
             .Include(a => a.AnioEscolar)
-            .Where(a => a.IdMaestro == maestro.IdMaestro && a.Activo && a.AnioEscolar.Activo)
+            
+            .Where(a => a.IdMaestro == maestro.IdMaestro && a.Activo && a.AnioEscolar.Activo )
             .Select(a => new
             {
                 a.IdAsignacionDocente,
                 Curso = a.Curso.Nombre,
                 Grado = a.Curso.Grado.Nombre,
+               maestro = a.Maestro.Nombres,
+                Nivel = a.Curso.Grado.Nivel.Nombre,
                 Materia = a.Materia.Nombre,
                 AnioEscolar = a.AnioEscolar.Nombre
             })

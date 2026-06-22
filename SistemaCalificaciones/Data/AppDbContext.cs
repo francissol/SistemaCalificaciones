@@ -19,7 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<ResultadoAprendizaje> ResultadosAprendizaje { get; set; }
 
 
-    public DbSet<CalificacionRA> CalificacionesRA { get; set; }
+    //public DbSet<CalificacionRA> CalificacionesRA { get; set; }
 
     public DbSet<AnioEscolar> AniosEscolares => Set<AnioEscolar>();
     public DbSet<Nivel> Niveles => Set<Nivel>();
@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<GradoMateria> GradoMaterias => Set<GradoMateria>();
     public DbSet<Inscripcion> Inscripciones => Set<Inscripcion>();
 
+    public DbSet<CursoMateria> CursoMaterias { get; set; }
     public DbSet<AsignacionDocente> AsignacionesDocentes => Set<AsignacionDocente>();
     public DbSet<PeriodoPublicacion> PeriodosPublicacion => Set<PeriodoPublicacion>();
     public DbSet<ActividadEvaluativa> ActividadesEvaluativas => Set<ActividadEvaluativa>();
@@ -309,6 +310,9 @@ public class AppDbContext : DbContext
             .HasIndex(c => new { c.IdEstudiante, c.IdAsignacionDocente, c.IdPeriodoPublicacion })
             .IsUnique();
 
+
+        modelBuilder.Entity<CursoMateria>()
+    .HasKey(cm => cm.IdCursoMateria);
 
 
 

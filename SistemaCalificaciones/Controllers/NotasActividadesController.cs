@@ -9,7 +9,7 @@ namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador,Maestro")]
+[Authorize(Roles = "Administrador,Maestro,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class NotasActividadesController : ControllerBase
 {
     private readonly AppDbContext _context;

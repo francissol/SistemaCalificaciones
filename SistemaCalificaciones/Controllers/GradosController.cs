@@ -4,12 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using SistemaCalificaciones.Data;
 using SistemaCalificaciones.DTOs.Grados;
 using SistemaCalificaciones.Models;
-
+using SistemaCalificaciones.Helpers;
 namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = "Administrador,,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class GradosController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -22,14 +22,26 @@ public class GradosController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var grados = await _context.Grados
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
+        var query = _context.Grados
             .Include(g => g.Nivel)
-            .OrderBy(g => g.Orden)
+            .AsQueryable();
+
+        if (nivelCoordinador != null)
+        {
+            query = query.Where(g => g.Nivel.Nombre == nivelCoordinador);
+        }
+
+        var grados = await query
+            .OrderBy(g => g.Nivel.Nombre)
+            .ThenBy(g => g.Orden)
             .Select(g => new
             {
                 g.IdGrado,
                 g.Nombre,
                 g.Orden,
+               
                 g.IdNivel,
                 Nivel = g.Nivel.Nombre
             })

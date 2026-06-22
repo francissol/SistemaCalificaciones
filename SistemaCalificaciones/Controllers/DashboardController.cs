@@ -2,12 +2,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SistemaCalificaciones.Data;
+using SistemaCalificaciones.Helpers;
 
 namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = "Administrador,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class DashboardController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -20,11 +21,50 @@ public class DashboardController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetDashboard()
     {
-        var estudiantes = await _context.Estudiantes.CountAsync(e => e.Activo);
-        var maestros = await _context.Maestros.CountAsync(m => m.Activo);
-        var padres = await _context.Padres.CountAsync(p => p.Activo);
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
 
-        var cursos = await _context.Cursos.CountAsync(c => c.Activo);
+        var estudiantesQuery = _context.Estudiantes
+            .Include(e => e.Inscripciones)
+                .ThenInclude(i => i.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
+            .Where(e => e.Activo)
+            .AsQueryable();
+
+        var cursosQuery = _context.Cursos
+            .Include(c => c.Grado)
+                .ThenInclude(g => g.Nivel)
+            .Where(c => c.Activo)
+            .AsQueryable();
+
+        var maestrosQuery = _context.Maestros
+            .Include(m => m.AsignacionesDocentes)
+                .ThenInclude(a => a.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
+            .Where(m => m.Activo)
+            .AsQueryable();
+
+        if (nivelCoordinador != null)
+        {
+            estudiantesQuery = estudiantesQuery.Where(e =>
+                e.Inscripciones.Any(i =>
+                    i.Estado == "Activo" &&
+                    i.Curso.Grado.Nivel.Nombre == nivelCoordinador));
+
+            cursosQuery = cursosQuery.Where(c =>
+                c.Grado.Nivel.Nombre == nivelCoordinador);
+
+            maestrosQuery = maestrosQuery.Where(m =>
+                m.AsignacionesDocentes.Any(a =>
+                    a.Curso.Grado.Nivel.Nombre == nivelCoordinador));
+        }
+
+        var estudiantes = await estudiantesQuery.CountAsync();
+        var maestros = await maestrosQuery.CountAsync();
+        var cursos = await cursosQuery.CountAsync();
+
+        var padres = await _context.Padres.CountAsync(p => p.Activo);
 
         var materias = await _context.Materias.CountAsync(m => m.Activa);
 
@@ -47,7 +87,8 @@ public class DashboardController : ControllerBase
             cursos,
             materias,
             publicacionesAbiertas,
-            anioActivo
+            anioActivo,
+            nivel = nivelCoordinador ?? "Todos"
         });
     }
 }

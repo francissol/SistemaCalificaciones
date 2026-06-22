@@ -6,12 +6,13 @@ using SistemaCalificaciones.DTOs.Estudiantes;
 using SistemaCalificaciones.Models;
 using SistemaCalificaciones.Services;
 using System.Security.Claims;
+using SistemaCalificaciones.Helpers;
 
 namespace SistemaCalificaciones.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Administrador")]
+[Authorize(Roles = "Administrador,CoordinadorPrimaria,CoordinadorSecundaria,CoordinadorPolitecnico")]
 public class EstudiantesController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -26,10 +27,27 @@ public class EstudiantesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
-        var estudiantes = await _context.Estudiantes
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
+        var query = _context.Estudiantes
             .Include(e => e.Usuario)
             .Include(e => e.Inscripciones)
                 .ThenInclude(i => i.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
+            .AsQueryable();
+
+        if (nivelCoordinador != null)
+        {
+            query = query.Where(e =>
+                e.Inscripciones.Any(i =>
+                    i.Estado == "Activo" &&
+                    i.Curso.Grado.Nivel.Nombre == nivelCoordinador
+                )
+            );
+        }
+
+        var estudiantes = await query
             .OrderBy(e => e.Nombres)
             .Select(e => new
             {
@@ -42,8 +60,14 @@ public class EstudiantesController : ControllerBase
                 e.Activo,
                 Usuario = e.Usuario != null ? e.Usuario.NombreUsuario : null,
                 CursoActual = e.Inscripciones
+                    .Where(i => i.Estado == "Activo")
                     .OrderByDescending(i => i.IdInscripcion)
                     .Select(i => i.Curso.Nombre)
+                    .FirstOrDefault(),
+                Nivel = e.Inscripciones
+                    .Where(i => i.Estado == "Activo")
+                    .OrderByDescending(i => i.IdInscripcion)
+                    .Select(i => i.Curso.Grado.Nivel.Nombre)
                     .FirstOrDefault()
             })
             .ToListAsync();
@@ -54,16 +78,30 @@ public class EstudiantesController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
         var estudiante = await _context.Estudiantes
             .Include(e => e.Usuario)
             .Include(e => e.PadreEstudiantes)
                 .ThenInclude(pe => pe.Padre)
             .Include(e => e.Inscripciones)
                 .ThenInclude(i => i.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
             .FirstOrDefaultAsync(e => e.IdEstudiante == id);
 
         if (estudiante == null)
             return NotFound("Estudiante no encontrado.");
+
+        if (nivelCoordinador != null)
+        {
+            var perteneceNivel = estudiante.Inscripciones.Any(i =>
+                i.Estado == "Activo" &&
+                i.Curso.Grado.Nivel.Nombre == nivelCoordinador);
+
+            if (!perteneceNivel)
+                return Forbid();
+        }
 
         return Ok(estudiante);
     }
@@ -83,9 +121,18 @@ public class EstudiantesController : ControllerBase
         if (existeMatricula)
             return BadRequest("Ya existe un estudiante con esa matrícula.");
 
-        var cursoExiste = await _context.Cursos.AnyAsync(c => c.IdCurso == dto.IdCurso && c.Activo);
-        if (!cursoExiste)
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
+        var curso = await _context.Cursos
+            .Include(c => c.Grado)
+                .ThenInclude(g => g.Nivel)
+            .FirstOrDefaultAsync(c => c.IdCurso == dto.IdCurso && c.Activo);
+
+        if (curso == null)
             return BadRequest("El curso no existe o está inactivo.");
+
+        if (nivelCoordinador != null && curso.Grado.Nivel.Nombre != nivelCoordinador)
+            return Forbid();
 
         var anioExiste = await _context.AniosEscolares.AnyAsync(a => a.IdAnioEscolar == dto.IdAnioEscolar && !a.Cerrado);
         if (!anioExiste)
@@ -205,10 +252,27 @@ public class EstudiantesController : ControllerBase
     [HttpPut("{id}/datos-contacto")]
     public async Task<IActionResult> ActualizarDatosContacto(int id, ActualizarDatosEstudianteDto dto)
     {
-        var estudiante = await _context.Estudiantes.FindAsync(id);
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
+        var estudiante = await _context.Estudiantes
+            .Include(e => e.Inscripciones)
+                .ThenInclude(i => i.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
+            .FirstOrDefaultAsync(e => e.IdEstudiante == id);
 
         if (estudiante == null)
             return NotFound("Estudiante no encontrado.");
+
+        if (nivelCoordinador != null)
+        {
+            var perteneceNivel = estudiante.Inscripciones.Any(i =>
+                i.Estado == "Activo" &&
+                i.Curso.Grado.Nivel.Nombre == nivelCoordinador);
+
+            if (!perteneceNivel)
+                return Forbid();
+        }
 
         estudiante.Telefono = dto.Telefono;
         estudiante.Correo = dto.Correo;
@@ -226,17 +290,33 @@ public class EstudiantesController : ControllerBase
         });
     }
 
-   
+
 
     [HttpPut("{id}/estado")]
     public async Task<IActionResult> CambiarEstado(int id)
     {
+        var nivelCoordinador = NivelHelper.ObtenerNivelPorRol(User);
+
         var estudiante = await _context.Estudiantes
             .Include(e => e.Usuario)
+            .Include(e => e.Inscripciones)
+                .ThenInclude(i => i.Curso)
+                    .ThenInclude(c => c.Grado)
+                        .ThenInclude(g => g.Nivel)
             .FirstOrDefaultAsync(e => e.IdEstudiante == id);
 
         if (estudiante == null)
             return NotFound("Estudiante no encontrado.");
+
+        if (nivelCoordinador != null)
+        {
+            var perteneceNivel = estudiante.Inscripciones.Any(i =>
+                i.Estado == "Activo" &&
+                i.Curso.Grado.Nivel.Nombre == nivelCoordinador);
+
+            if (!perteneceNivel)
+                return Forbid();
+        }
 
         estudiante.Activo = !estudiante.Activo;
 
@@ -252,4 +332,5 @@ public class EstudiantesController : ControllerBase
             estudiante.Activo
         });
     }
+
 }
