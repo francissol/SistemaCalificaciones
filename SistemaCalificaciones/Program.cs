@@ -22,7 +22,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("ReactPolicy", policy =>
     {
         policy.WithOrigins("http://localhost:5173",
-            "https://sistema-calificaciones-front-12a3.vercel.app/")
+            "https://sistema-calificaciones-front-12a3.vercel.app/",
+            "https://sistema-calificaciones-front-12a3-fk6lwiacj-mir-calificaciones.vercel.app/")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
