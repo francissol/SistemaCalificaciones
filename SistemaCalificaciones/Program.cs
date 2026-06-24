@@ -23,7 +23,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins("http://localhost:5173",
             "https://sistema-calificaciones-front-12a3.vercel.app/",
-            "https://sistema-calificaciones-front-12a3-fk6lwiacj-mir-calificaciones.vercel.app")
+            "https://sistema-calificaciones-front-12a3-fk6lwiacj-mir-calificaciones.vercel.app",
+            "https://sistema-calificaciones-front-obd85f0yt-mir-calificaciones.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
